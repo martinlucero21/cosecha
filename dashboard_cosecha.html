@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tablero de Cosecha</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      color-scheme: light;
+      --bg-0: #F4F0E6; --bg-1: #E9E1CF;
+      --panel: rgba(255,252,244,.88);
+      --ink: #172018; --ink-soft: #5F665B; --ink-faint: #8C907F;
+      --line: rgba(61,75,55,.16);
+      --shadow: 0 18px 48px rgba(47,58,38,.12);
+      --shadow-soft: 0 8px 22px rgba(47,58,38,.08);
+      --field: #315C35; --field-mid: #5D8C4C; --field-light: #A7C86D;
+      --wheat: #D5A84A; --wheat-light: #FFF0C8; --wheat-dark: #8D651B;
+      --danger: #C84E45; --blue: #3D7EA6;
+      --radius-lg: 24px;
+    }
+    body {
+      font-family: 'Inter', sans-serif; color: var(--ink); line-height: 1.5;
+      min-height: 100vh; max-width: 1180px; margin: 0 auto; padding: 28px;
+      background: radial-gradient(circle at 12% 5%, rgba(213,168,74,.26), transparent 32%),
+                  radial-gradient(circle at 86% 8%, rgba(61,126,166,.20), transparent 30%),
+                  linear-gradient(135deg, var(--bg-0), var(--bg-1));
+    }
+    body::before {
+      content:''; position:fixed; inset:0; pointer-events:none; opacity:.34;
+      background-image: linear-gradient(rgba(49,92,53,.06) 1px,transparent 1px),
+                        linear-gradient(90deg,rgba(49,92,53,.06) 1px,transparent 1px);
+      background-size: 38px 38px;
+      mask-image: linear-gradient(to bottom, black, transparent 86%);
+    }
+
+    /* ── HEADER ── */
+    .header {
+      display:flex; align-items:flex-end; justify-content:space-between;
+      gap:18px; flex-wrap:wrap; margin-bottom:24px; padding:28px 30px;
+      border:1px solid rgba(255,255,255,.55); border-radius:30px;
+      background: linear-gradient(135deg,rgba(23,32,24,.96),rgba(49,92,53,.92)),
+                  linear-gradient(90deg,rgba(213,168,74,.26),transparent);
+      box-shadow:var(--shadow); position:relative; overflow:hidden;
+    }
+    .header::before {
+      content:''; position:absolute; inset:auto -8% -55% 45%; height:150px;
+      border-radius:999px; background:rgba(213,168,74,.25); filter:blur(18px);
+    }
+    .header-title { position:relative; font-size:clamp(26px,4vw,42px); line-height:1; font-weight:700; color:#FFF8E8; letter-spacing:-1.1px; }
+    .header-meta  { position:relative; display:flex; flex-direction:column; align-items:flex-end; gap:8px; }
+    .header-badge {
+      display:inline-flex; align-items:center; gap:8px; font-size:12px;
+      font-weight:600; color:rgba(255,248,232,.76); padding:8px 12px;
+      border-radius:999px; background:rgba(255,255,255,.10);
+      border:1px solid rgba(255,255,255,.18); backdrop-filter:blur(8px);
+    }
+    .pulse { width:8px; height:8px; border-radius:50%; background:#6EE37E; box-shadow:0 0 0 0 rgba(110,227,126,.4); animation:pulse 2s infinite; }
+    @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(110,227,126,.4)} 70%{box-shadow:0 0 0 8px rgba(110,227,126,0)} 100%{box-shadow:0 0 0 0 rgba(110,227,126,0)} }
+
+    /* ── FILTROS ── */
+    .filters {
+      display:flex; gap:10px; flex-wrap:wrap; margin-bottom:22px;
+      padding:16px 20px; background:var(--panel);
+      border:1px solid rgba(255,255,255,.7); border-radius:var(--radius-lg);
+      box-shadow:var(--shadow-soft); backdrop-filter:blur(14px);
+    }
+    .filter-group { display:flex; flex-direction:column; gap:5px; min-width:160px; flex:1; }
+    .filter-label { font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.9px; color:var(--ink-faint); }
+    select {
+      padding:8px 12px; border-radius:12px; border:1px solid rgba(61,75,55,.16);
+      background:rgba(255,255,255,.7); color:var(--ink); font-family:inherit;
+      font-size:13px; font-weight:500; cursor:pointer; appearance:none;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4l4 4 4-4' fill='none' stroke='%235F665B' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat:no-repeat; background-position:right 10px center;
+      padding-right:30px; transition:border-color .15s;
+    }
+    select:focus { outline:none; border-color:var(--field-mid); }
+    .btn-refresh {
+      align-self:flex-end; padding:8px 16px; border-radius:12px; border:none;
+      background:var(--field); color:#fff; font-family:inherit; font-size:13px;
+      font-weight:600; cursor:pointer; transition:background .15s; white-space:nowrap;
+    }
+    .btn-refresh:hover { background:#254A28; }
+    .btn-refresh:disabled { background:#aaa; cursor:not-allowed; }
+
+    /* ── KPIs ── */
+    .kpi-grid { display:grid; grid-template-columns:repeat(5,minmax(140px,1fr)); gap:14px; margin-bottom:26px; }
+    .kpi {
+      min-height:150px; border:1px solid rgba(255,255,255,.58);
+      border-radius:var(--radius-lg); padding:18px 18px 16px;
+      position:relative; overflow:hidden; box-shadow:var(--shadow-soft);
+    }
+    .kpi::before {
+      content:''; position:absolute; inset:0;
+      background: radial-gradient(circle at 88% 8%,rgba(255,255,255,.48),transparent 34%),
+                  linear-gradient(135deg,rgba(255,255,255,.26),rgba(255,255,255,.06));
+      pointer-events:none;
+    }
+    .kpi::after { content:''; position:absolute; left:18px; right:18px; bottom:0; height:4px; border-radius:999px 999px 0 0; background:currentColor; opacity:.32; }
+    .kpi>*{position:relative;z-index:1;}
+    .kpi.green{color:#315C35;background:linear-gradient(145deg,#E6F0DD,#F3F8EE);}
+    .kpi.amber{color:#9A6B18;background:linear-gradient(145deg,#F7E8C0,#FFF6DF);}
+    .kpi.red  {color:#B14A43;background:linear-gradient(145deg,#F6DCD7,#FFF0EC);}
+    .kpi.blue {color:#346F93;background:linear-gradient(145deg,#DCECF3,#F0F8FB);}
+    .kpi-label { font-size:10px; font-weight:700; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.95px; margin-bottom:12px; }
+    .kpi-value { font-size:clamp(26px,3vw,36px); font-weight:700; color:var(--ink); letter-spacing:-1.3px; line-height:.98; }
+    .kpi-sub { font-size:12px; font-weight:550; color:var(--ink-soft); margin-top:7px; }
+    .kpi-badge { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700; padding:5px 10px; border-radius:999px; margin-top:12px; border:1px solid transparent; }
+    .badge-green{background:rgba(93,140,76,.14);color:#315C35;border-color:rgba(93,140,76,.20);}
+    .badge-amber{background:rgba(213,168,74,.18);color:#7D5819;border-color:rgba(213,168,74,.24);}
+    .badge-red  {background:rgba(200,78,69,.13); color:#A83C35;border-color:rgba(200,78,69,.22);}
+    .badge-blue {background:rgba(61,126,166,.13);color:#285A78;border-color:rgba(61,126,166,.22);}
+
+    /* ── SECTION TITLE ── */
+    .section-title {
+      font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:1.3px;
+      color:var(--ink-soft); margin:30px 0 13px; display:flex; align-items:center; gap:10px;
+    }
+    .section-title::before { content:''; width:10px; height:10px; border-radius:50%; background:var(--wheat); box-shadow:0 0 0 5px rgba(213,168,74,.16); }
+    .section-title::after  { content:''; flex:1; height:1px; background:linear-gradient(90deg,var(--line),transparent); }
+
+    /* ── CARDS ── */
+    .full-card,.chart-card {
+      background:var(--panel); border:1px solid rgba(255,255,255,.7);
+      border-radius:var(--radius-lg); padding:21px 22px;
+      box-shadow:var(--shadow-soft); backdrop-filter:blur(14px);
+    }
+    .full-card{margin-bottom:18px;}
+    .chart-row { display:grid; grid-template-columns:1.08fr .92fr; gap:16px; margin-bottom:18px; }
+    .chart-label {
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      font-size:11px; font-weight:800; color:var(--ink-soft);
+      text-transform:uppercase; letter-spacing:.9px; margin-bottom:16px;
+    }
+    .chart-label::after { content:''; width:42px; height:3px; border-radius:999px; background:var(--wheat); opacity:.75; }
+
+    /* ── BARS ── */
+    .bar-wrap { display:flex; flex-direction:column; gap:10px; }
+    .bar-row  { display:flex; align-items:center; gap:10px; }
+    .bar-name { min-width:60px; font-size:12px; font-weight:600; color:var(--ink-soft); font-family:'JetBrains Mono',monospace; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:90px; }
+    .bar-track { flex:1; background:rgba(37,48,35,.10); border:1px solid rgba(255,255,255,.55); border-radius:999px; height:15px; overflow:hidden; box-shadow:inset 0 1px 3px rgba(0,0,0,.06); }
+    .bar-fill  { height:100%; border-radius:999px; box-shadow:inset 0 0 0 1px rgba(255,255,255,.22); transition:width .6s ease; }
+    .bar-val   { min-width:72px; text-align:right; font-size:12px; font-weight:600; color:var(--ink-soft); font-family:'JetBrains Mono',monospace; }
+
+    /* ── PROGRESS ── */
+    .progress-outer { background:rgba(37,48,35,.12); border-radius:999px; height:28px; overflow:hidden; margin-bottom:6px; border:1px solid rgba(255,255,255,.72); box-shadow:inset 0 1px 3px rgba(0,0,0,.07); }
+    .progress-fill  { height:100%; border-radius:999px; background:linear-gradient(90deg,var(--field),var(--field-light),var(--wheat)); display:flex; align-items:center; justify-content:flex-end; padding-right:12px; font-size:12px; font-weight:800; color:#fff; text-shadow:0 1px 1px rgba(0,0,0,.18); transition:width .6s ease; }
+    .progress-labels { display:flex; justify-content:space-between; font-size:12px; font-weight:650; color:var(--ink-soft); margin-bottom:9px; gap:12px; }
+
+    /* ── TABLE ── */
+    table{width:100%;border-collapse:separate;border-spacing:0 6px;}
+    th{text-align:left;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.75px;color:var(--ink-faint);padding:4px 10px 8px;white-space:nowrap;}
+    td{padding:11px 10px;color:var(--ink);font-size:13px;font-weight:520;white-space:nowrap;background:rgba(255,255,255,.47);border-top:1px solid rgba(255,255,255,.62);border-bottom:1px solid rgba(61,75,55,.08);}
+    tbody tr td:first-child{border-radius:14px 0 0 14px;border-left:1px solid rgba(255,255,255,.62);}
+    tbody tr td:last-child {border-radius:0 14px 14px 0;border-right:1px solid rgba(255,255,255,.62);}
+    tbody tr:hover td{background:rgba(255,255,255,.78);}
+    .lote-chip{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;background:#182319;color:#FFF2C8;padding:4px 9px;border-radius:999px;display:inline-block;box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);}
+    .rinde-bar{display:inline-block;height:9px;border-radius:999px;background:linear-gradient(90deg,var(--field),var(--field-light));vertical-align:middle;margin-right:7px;}
+
+    /* ── DAILY ── */
+    .daily-row{display:grid;grid-template-columns:72px 1fr auto;align-items:center;gap:16px;padding:14px 0;border-bottom:1px solid var(--line);}
+    .daily-row:last-child{border-bottom:none;}
+    .daily-date{width:fit-content;font-size:12px;font-weight:800;color:var(--wheat-dark);padding:5px 8px;border-radius:10px;background:rgba(213,168,74,.16);}
+    .daily-lote{font-size:15px;font-weight:800;color:var(--ink);}
+    .daily-stats{display:flex;gap:10px;font-size:12px;font-weight:600;color:var(--ink-soft);margin-top:4px;flex-wrap:wrap;}
+    .stat-pill{background:#182319;color:#FFF2C8;padding:6px 11px;border-radius:999px;font-weight:800;font-size:12px;box-shadow:0 6px 14px rgba(24,35,25,.12);}
+    .note{font-size:12px;font-weight:600;color:var(--ink-soft);}
+    canvas{filter:drop-shadow(0 8px 18px rgba(47,58,38,.09));}
+
+    /* ── ESTADO CARGA ── */
+    .loading-overlay{
+      position:fixed;inset:0;background:rgba(244,240,230,.85);backdrop-filter:blur(6px);
+      display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;
+      z-index:100;transition:opacity .3s;
+    }
+    .loading-overlay.hidden{opacity:0;pointer-events:none;}
+    .spinner{width:40px;height:40px;border:3px solid rgba(49,92,53,.2);border-top-color:var(--field);border-radius:50%;animation:spin .8s linear infinite;}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .loading-text{font-size:14px;font-weight:600;color:var(--ink-soft);}
+    .error-banner{
+      display:none;padding:14px 20px;border-radius:16px;margin-bottom:18px;
+      background:rgba(200,78,69,.10);border:1px solid rgba(200,78,69,.25);
+      color:#8B2E28;font-size:13px;font-weight:600;
+    }
+
+    @media(max-width:980px){body{padding:20px}.kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.chart-row{grid-template-columns:1fr}}
+    @media(max-width:600px){body{padding:14px}.header{padding:22px;border-radius:24px}.kpi-grid{grid-template-columns:1fr}.full-card,.chart-card{padding:17px;border-radius:20px}.daily-row{grid-template-columns:1fr;gap:8px}.daily-row>div:last-child{justify-self:start}.filters{flex-direction:column}}
+  </style>
+</head>
+<body>
+
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+  <div class="loading-text">Cargando datos de cosecha…</div>
+</div>
+
+<!-- Header -->
+<div class="header">
+  <div>
+    <div class="header-title">Tablero de Cosecha</div>
+    <div style="position:relative;font-size:13px;font-weight:600;color:rgba(255,248,232,.7);margin-top:8px" id="headerSub">—</div>
+  </div>
+  <div class="header-meta">
+    <div class="header-badge"><div class="pulse"></div> En vivo · Supabase</div>
+    <div class="header-badge" id="lastUpdate">—</div>
+  </div>
+</div>
+
+<!-- Error banner -->
+<div class="error-banner" id="errorBanner"></div>
+
+<!-- Filtros -->
+<div class="filters">
+  <div class="filter-group">
+    <div class="filter-label">Campaña</div>
+    <select id="fSeason"><option value="">Todas</option></select>
+  </div>
+  <div class="filter-group">
+    <div class="filter-label">Establecimiento</div>
+    <select id="fFarm"><option value="">Todos</option></select>
+  </div>
+  <div class="filter-group">
+    <div class="filter-label">Actividad</div>
+    <select id="fCrop"><option value="">Todas</option></select>
+  </div>
+  <div class="filter-group">
+    <div class="filter-label">Lote</div>
+    <select id="fField"><option value="">Todos</option></select>
+  </div>
+  <button class="btn-refresh" id="btnRefresh" onclick="loadData()">↻ Actualizar</button>
+</div>
+
+<!-- KPIs -->
+<div class="kpi-grid">
+  <div class="kpi green">
+    <div class="kpi-label">Ha cosechadas</div>
+    <div class="kpi-value" id="kpiHa">—</div>
+    <div class="kpi-sub" id="kpiHaSub">—</div>
+    <div><span class="kpi-badge badge-green" id="kpiHaPct">—</span></div>
+  </div>
+  <div class="kpi amber">
+    <div class="kpi-label">Operaciones</div>
+    <div class="kpi-value" id="kpiOps">—</div>
+    <div class="kpi-sub" id="kpiOpsSub">—</div>
+    <div><span class="kpi-badge badge-amber" id="kpiOpsLotes">—</span></div>
+  </div>
+  <div class="kpi green">
+    <div class="kpi-label">Producción acum.</div>
+    <div class="kpi-value" id="kpiProd">—</div>
+    <div class="kpi-sub">toneladas cosechadas</div>
+    <div><span class="kpi-badge badge-green" id="kpiProdSub">—</span></div>
+  </div>
+  <div class="kpi blue">
+    <div class="kpi-label">Rinde promedio</div>
+    <div class="kpi-value" id="kpiRinde">—</div>
+    <div class="kpi-sub">tn/ha promedio</div>
+    <div><span class="kpi-badge badge-blue" id="kpiRindeSub">—</span></div>
+  </div>
+  <div class="kpi amber">
+    <div class="kpi-label">Humedad prom.</div>
+    <div class="kpi-value" id="kpiHum">—</div>
+    <div class="kpi-sub">% humedad promedio</div>
+    <div><span class="kpi-badge badge-amber" id="kpiHumSub">—</span></div>
+  </div>
+</div>
+
+<!-- Rendimiento por lote -->
+<div class="section-title">Rendimiento por lote</div>
+<div class="chart-row">
+  <div class="chart-card">
+    <div class="chart-label">Rendimiento real por lote (tn/ha)</div>
+    <div class="bar-wrap" id="barRinde"></div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-label">Producción por cultivo (tn)</div>
+    <div style="position:relative;width:100%;height:180px">
+      <canvas id="cropChart" role="img" aria-label="Producción por cultivo"></canvas>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:12px" id="cropLegend"></div>
+  </div>
+</div>
+
+<!-- Avance de superficie por lote -->
+<div class="section-title">Área cosechada por lote</div>
+<div class="full-card">
+  <div class="chart-label">Superficie cosechada (ha) por lote</div>
+  <div class="bar-wrap" id="barArea"></div>
+  <div style="margin-top:16px">
+    <div class="progress-labels">
+      <span>0 ha</span>
+      <span id="progLabel">—</span>
+      <span id="progTotal">—</span>
+    </div>
+    <div class="progress-outer">
+      <div class="progress-fill" id="progBar" style="width:0%">0%</div>
+    </div>
+  </div>
+</div>
+
+<!-- Tabla por lote -->
+<div class="section-title">Detalle por lote</div>
+<div class="full-card" style="overflow-x:auto">
+  <table>
+    <thead>
+      <tr>
+        <th>Lote</th>
+        <th>Cultivo</th>
+        <th>Campaña</th>
+        <th>Ha cosech.</th>
+        <th>Producción (tn)</th>
+        <th>Rinde (tn/ha)</th>
+        <th>Humedad (%)</th>
+        <th>Velocidad (km/h)</th>
+        <th>Inicio</th>
+        <th>Último reg.</th>
+        <th>Ops.</th>
+      </tr>
+    </thead>
+    <tbody id="tableBody"></tbody>
+  </table>
+</div>
+
+<!-- Registro diario -->
+<div class="section-title">Actividad diaria reciente</div>
+<div class="full-card" id="dailyList">
+  <div class="note" style="padding:12px 0">Cargando…</div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════
+// CONFIGURACIÓN
+// ══════════════════════════════════════════════════════
+const SUPABASE_URL      = 'https://vhoiwmjjuonrffpgxabk.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZob2l3bWpqdW9ucmZmcGd4YWJrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc4NjY5NzYsImV4cCI6MjA5MzQ0Mjk3Nn0.cmGCTBrxrJFxCOd9KNcuemVA7z1GIQg2ChrShK3cu74';
+const TABLE             = 'jd_harvest_operations';
+
+// Filtro de cliente hardcodeado — solo muestra registros cuyo
+// client_name empiece con "LIAG" (case-insensitive)
+const CLIENT_FILTER = 'client_name=ilike.LIAG*';
+
+// ══════════════════════════════════════════════════════
+// ESTADO
+// ══════════════════════════════════════════════════════
+let allData = [];
+let cropChart = null;
+const CROP_COLORS = ['#315C35','#D5A84A','#3D7EA6','#C84E45','#7B5EA7','#4A9B7F','#C87A3A'];
+const CROP_LABELS = {
+  SOYBEANS:'Soja', CORN_WET:'Maíz', CORN_DRY:'Maíz seco',
+  WHEAT_DURUM:'Trigo candeal', WHEAT:'Trigo', SUNFLOWER:'Girasol',
+  SUNFLOWER_OIL:'Girasol', SORGHUM:'Sorgo', CANOLA:'Camelina',
+  CHICKPEAS:'Garbanzo', COTTON:'Algodón', EDIBLE_BEANS:'Poroto',
+  GRASS_SEED:'Cobertura', LENTIL_LAIRD:'Lentejas', MUNG_BEAN:'Poroto Mung',
+  PEA_TRAPPER:'Arveja', SESAME:'Sésamo',
+};
+
+// Normaliza field_name: "I02~1" → "I02", "BL13~2" → "BL13"
+function normalizeField(name) {
+  return name ? name.replace(/~\d+$/, '').trim() : name;
+}
+
+// ══════════════════════════════════════════════════════
+// FETCH DESDE SUPABASE
+// ══════════════════════════════════════════════════════
+async function fetchAll() {
+  const PAGE = 1000;
+  let rows = [], offset = 0, done = false;
+  while (!done) {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/${TABLE}?select=*&${CLIENT_FILTER}&order=start_date.asc&limit=${PAGE}&offset=${offset}`,
+      { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } }
+    );
+    if (!res.ok) throw new Error(`Supabase ${res.status}: ${await res.text()}`);
+    const batch = await res.json();
+    rows = rows.concat(batch);
+    if (batch.length < PAGE) done = true;
+    else offset += PAGE;
+  }
+  return rows;
+}
+
+// ══════════════════════════════════════════════════════
+// FILTROS
+// ══════════════════════════════════════════════════════
+function getFilters() {
+  return {
+    season: document.getElementById('fSeason').value,
+    farm:   document.getElementById('fFarm').value,
+    field:  document.getElementById('fField').value,
+    crop:   document.getElementById('fCrop').value,
+  };
+}
+
+function applyFilters(data) {
+  const f = getFilters();
+  return data.filter(r =>
+    (!f.season || r.crop_season === f.season) &&
+    (!f.farm   || r.farm_name  === f.farm)    &&
+    (!f.field  || normalizeField(r.field_name) === f.field) &&
+    (!f.crop   || r.crop_name  === f.crop)
+  );
+}
+
+function populateFilters(data) {
+  const f = getFilters();
+
+  // Campaña — siempre sobre todos los datos
+  const fillSelect = (id, vals, labelFn) => {
+    const el  = document.getElementById(id);
+    const cur = el.value;
+    el.innerHTML = '<option value="">Todos</option>';
+    [...vals].sort().forEach(v => {
+      const o = document.createElement('option');
+      o.value = v;
+      o.textContent = labelFn ? labelFn(v) : v;
+      if (v === cur) o.selected = true;
+      el.appendChild(o);
+    });
+    // Si el valor previo ya no existe en las opciones, limpiar
+    if (cur && !vals.has(cur)) el.value = '';
+  };
+
+  fillSelect('fSeason', new Set(data.map(r => r.crop_season).filter(Boolean)));
+
+  // Establecimiento — filtrado por campaña
+  const afterSeason = data.filter(r => !f.season || r.crop_season === f.season);
+  fillSelect('fFarm', new Set(afterSeason.map(r => r.farm_name).filter(Boolean)));
+
+  // Actividad (cultivo) — filtrado por campaña + establecimiento
+  const afterFarm = afterSeason.filter(r => !f.farm || r.farm_name === f.farm);
+  fillSelect('fCrop', new Set(afterFarm.map(r => r.crop_name).filter(Boolean)), v => CROP_LABELS[v] || v);
+
+  // Lote — filtrado por campaña + establecimiento + actividad, con normalización ~
+  const afterCrop = afterFarm.filter(r => !f.crop || r.crop_name === f.crop);
+  fillSelect('fField', new Set(afterCrop.map(r => normalizeField(r.field_name)).filter(Boolean)));
+}
+
+// ══════════════════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════════════════
+const fmt  = n => n == null ? '—' : n.toLocaleString('es-AR', {maximumFractionDigits:0});
+const fmt2 = n => n == null ? '—' : n.toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2});
+const fmtDate = s => s ? new Date(s).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'}) : '—';
+
+function weightedAvg(data, valKey, weightKey) {
+  const tot = data.reduce((s,r) => s + (r[weightKey]||0), 0);
+  if (!tot) return null;
+  return data.reduce((s,r) => s + (r[valKey]||0)*(r[weightKey]||0), 0) / tot;
+}
+
+// ══════════════════════════════════════════════════════
+// RENDER KPIs
+// ══════════════════════════════════════════════════════
+function renderKPIs(data) {
+  const totalHa   = data.reduce((s,r) => s+(r.area_ha||0), 0);
+  const totalProd = data.reduce((s,r) => s+(r.yield_value||0), 0);
+  const totalOps  = data.length;
+  const fields    = new Set(data.map(r=>r.field_name)).size;
+  const avgRinde  = weightedAvg(data,'average_yield','area_ha');
+  const avgHum    = weightedAvg(data,'average_moisture','area_ha');
+  const seasons   = [...new Set(data.map(r=>r.crop_season))].sort().join(' · ');
+
+  document.getElementById('kpiHa').textContent    = fmt(totalHa);
+  document.getElementById('kpiHaSub').textContent = seasons || '—';
+  document.getElementById('kpiHaPct').textContent = `${fields} lote${fields!==1?'s':''}`;
+
+  document.getElementById('kpiOps').textContent     = fmt(totalOps);
+  document.getElementById('kpiOpsSub').textContent  = 'operaciones registradas';
+  document.getElementById('kpiOpsLotes').textContent= `${fields} lotes distintos`;
+
+  document.getElementById('kpiProd').textContent   = fmt(totalProd);
+  document.getElementById('kpiProdSub').textContent= `${fmt2(totalProd/1000)} miles de tn`;
+
+  document.getElementById('kpiRinde').textContent  = fmt2(avgRinde);
+  document.getElementById('kpiRindeSub').textContent= avgRinde ? `prom. ponderado s/área` : '—';
+
+  document.getElementById('kpiHum').textContent    = fmt2(avgHum);
+  document.getElementById('kpiHumSub').textContent = avgHum ? `prom. ponderado s/área` : '—';
+
+  // Header sub
+  const crops = [...new Set(data.map(r=>CROP_LABELS[r.crop_name]||r.crop_name))];
+  document.getElementById('headerSub').textContent =
+    (crops.slice(0,2).join(' · ') || '—') + (seasons ? ` · Campaña ${seasons}` : '');
+}
+
+// ══════════════════════════════════════════════════════
+// RENDER BARRAS POR LOTE
+// ══════════════════════════════════════════════════════
+function renderBarsByField(data) {
+  // Agrupar por field_name
+  const map = {};
+  data.forEach(r => {
+    const k = r.field_name;
+    if (!map[k]) map[k] = { ha:0, prod:0, haArr:[], rindeArr:[], humArr:[] };
+    map[k].ha   += r.area_ha    || 0;
+    map[k].prod += r.yield_value|| 0;
+    map[k].haArr.push(r.area_ha||0);
+    map[k].rindeArr.push({ v:r.average_yield||0, w:r.area_ha||0 });
+    map[k].humArr.push({ v:r.average_moisture||0, w:r.area_ha||0 });
+  });
+
+  const fields = Object.entries(map).map(([name, d]) => {
+    const totW  = d.rindeArr.reduce((s,x)=>s+x.w,0);
+    const rinde = totW ? d.rindeArr.reduce((s,x)=>s+x.v*x.w,0)/totW : 0;
+    return { name, ha: d.ha, prod: d.prod, rinde };
+  });
+
+  // Barras de rendimiento (ordenadas desc)
+  const byRinde = [...fields].sort((a,b)=>b.rinde-a.rinde);
+  const maxRinde = byRinde[0]?.rinde || 1;
+  document.getElementById('barRinde').innerHTML = byRinde.map(f => {
+    const pct = (f.rinde/maxRinde*100).toFixed(1);
+    const color = f.rinde >= maxRinde*0.9 ? 'var(--blue)' : f.rinde >= maxRinde*0.7 ? 'var(--field)' : 'var(--wheat)';
+    return `<div class="bar-row">
+      <span class="bar-name" title="${f.name}">${f.name}</span>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${color}"></div></div>
+      <span class="bar-val">${fmt2(f.rinde)}</span>
+    </div>`;
+  }).join('');
+
+  // Barras de área
+  const byHa = [...fields].sort((a,b)=>b.ha-a.ha);
+  const maxHa = byHa[0]?.ha || 1;
+  const totalHa = fields.reduce((s,f)=>s+f.ha,0);
+  document.getElementById('barArea').innerHTML = byHa.map(f => {
+    const pct = (f.ha/maxHa*100).toFixed(1);
+    return `<div class="bar-row">
+      <span class="bar-name" title="${f.name}">${f.name}</span>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:var(--field)"></div></div>
+      <span class="bar-val">${fmt(f.ha)} ha</span>
+    </div>`;
+  }).join('');
+
+  // Progress total
+  document.getElementById('progTotal').textContent = `${fmt(totalHa)} ha`;
+  document.getElementById('progLabel').textContent = `Total: ${fmt(totalHa)} ha · ${fields.length} lotes`;
+  document.getElementById('progBar').style.width = '100%';
+  document.getElementById('progBar').textContent  = `${fmt(totalHa)} ha`;
+}
+
+// ══════════════════════════════════════════════════════
+// RENDER CHART CULTIVOS
+// ══════════════════════════════════════════════════════
+function renderCropChart(data) {
+  const map = {};
+  data.forEach(r => {
+    const k = CROP_LABELS[r.crop_name] || r.crop_name;
+    map[k] = (map[k]||0) + (r.yield_value||0);
+  });
+  const labels = Object.keys(map);
+  const values = labels.map(l=>map[l]);
+  const colors = labels.map((_,i)=>CROP_COLORS[i%CROP_COLORS.length]);
+
+  if (cropChart) cropChart.destroy();
+  cropChart = new Chart(document.getElementById('cropChart'), {
+    type: 'doughnut',
+    data: { labels, datasets:[{ data:values, backgroundColor:colors, borderWidth:0, hoverOffset:4 }] },
+    options: {
+      responsive:true, maintainAspectRatio:false, cutout:'62%',
+      plugins:{
+        legend:{display:false},
+        tooltip:{ callbacks:{ label:c=>' '+c.label+': '+fmt(c.parsed)+' tn' } }
+      }
+    }
+  });
+  document.getElementById('cropLegend').innerHTML = labels.map((l,i)=>
+    `<span style="display:flex;align-items:center;gap:5px" class="note">
+      <span style="width:10px;height:10px;border-radius:2px;background:${colors[i]};display:inline-block"></span>
+      ${l} — ${fmt(values[i])} tn
+    </span>`
+  ).join('');
+}
+
+// ══════════════════════════════════════════════════════
+// RENDER TABLA
+// ══════════════════════════════════════════════════════
+function renderTable(data) {
+  const map = {};
+  data.forEach(r => {
+    const k = r.field_name+'|'+r.crop_name+'|'+r.crop_season;
+    if (!map[k]) map[k] = {
+      field: r.field_name, crop: r.crop_name, season: r.crop_season,
+      ha:0, prod:0, wRinde:0, wHum:0, wSpeed:0, ops:0,
+      minDate:r.start_date, maxDate:r.end_date
+    };
+    const d = map[k];
+    d.ha     += r.area_ha||0;
+    d.prod   += r.yield_value||0;
+    d.wRinde += (r.average_yield||0)*(r.area_ha||0);
+    d.wHum   += (r.average_moisture||0)*(r.area_ha||0);
+    d.wSpeed += (r.average_speed||0)*(r.area_ha||0);
+    d.ops++;
+    if (r.start_date < d.minDate) d.minDate = r.start_date;
+    if (r.end_date   > d.maxDate) d.maxDate = r.end_date;
+  });
+
+  const rows = Object.values(map).sort((a,b)=>b.ha-a.ha);
+  const maxRinde = Math.max(...rows.map(r=>r.ha?r.wRinde/r.ha:0));
+
+  document.getElementById('tableBody').innerHTML = rows.map(d => {
+    const rinde = d.ha ? d.wRinde/d.ha : 0;
+    const hum   = d.ha ? d.wHum/d.ha   : 0;
+    const spd   = d.ha ? d.wSpeed/d.ha  : 0;
+    const barW  = maxRinde ? Math.round(rinde/maxRinde*56) : 0;
+    return `<tr>
+      <td><span class="lote-chip">${d.field}</span></td>
+      <td>${CROP_LABELS[d.crop]||d.crop}</td>
+      <td>${d.season}</td>
+      <td>${fmt(d.ha)}</td>
+      <td>${fmt(d.prod)}</td>
+      <td><span class="rinde-bar" style="width:${barW}px"></span>${fmt2(rinde)}</td>
+      <td>${fmt2(hum)}</td>
+      <td>${fmt2(spd)}</td>
+      <td>${fmtDate(d.minDate)}</td>
+      <td>${fmtDate(d.maxDate)}</td>
+      <td>${d.ops}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════
+// RENDER ACTIVIDAD DIARIA
+// ══════════════════════════════════════════════════════
+function renderDaily(data) {
+  // Agrupar por fecha de extracción (día)
+  const map = {};
+  data.forEach(r => {
+    const day = (r.file_date || r.extracted_at||'').slice(0,10);
+    if (!day) return;
+    if (!map[day]) map[day] = { fields:new Set(), ha:0, prod:0 };
+    map[day].fields.add(r.field_name);
+    map[day].ha   += r.area_ha||0;
+    map[day].prod += r.yield_value||0;
+  });
+
+  const days = Object.entries(map).sort((a,b)=>b[0].localeCompare(a[0])).slice(0,7);
+  if (!days.length) {
+    document.getElementById('dailyList').innerHTML = '<div class="note" style="padding:12px 0">Sin actividad registrada.</div>';
+    return;
+  }
+
+  document.getElementById('dailyList').innerHTML = days.map(([day, d]) => {
+    const dt    = new Date(day+'T12:00:00');
+    const label = dt.toLocaleDateString('es-AR',{day:'numeric',month:'short'});
+    const lots  = [...d.fields].join(' · ');
+    return `<div class="daily-row">
+      <div class="daily-date">${label}</div>
+      <div>
+        <div class="daily-lote">${lots||'—'}</div>
+        <div class="daily-stats">
+          <span>${fmt(d.ha)} ha</span>
+          <span>${[...d.fields].length} lote${d.fields.size!==1?'s':''}</span>
+        </div>
+      </div>
+      <div><span class="stat-pill">${fmt(d.prod)} tn</span></div>
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════
+// CARGA PRINCIPAL
+// ══════════════════════════════════════════════════════
+async function loadData() {
+  const btn = document.getElementById('btnRefresh');
+  btn.disabled = true; btn.textContent = 'Cargando…';
+  document.getElementById('loadingOverlay').classList.remove('hidden');
+  document.getElementById('errorBanner').style.display = 'none';
+
+  try {
+    if (!allData.length) {
+      allData = await fetchAll();
+      populateFilters(allData);
+    }
+    render();
+    const now = new Date().toLocaleString('es-AR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+    document.getElementById('lastUpdate').textContent = `Actualizado: ${now}`;
+  } catch(e) {
+    const banner = document.getElementById('errorBanner');
+    banner.style.display = 'block';
+    banner.textContent = `Error al cargar datos: ${e.message}. Verificá SUPABASE_URL y SUPABASE_ANON_KEY.`;
+    console.error(e);
+  } finally {
+    btn.disabled = false; btn.textContent = '↻ Actualizar';
+    document.getElementById('loadingOverlay').classList.add('hidden');
+  }
+}
+
+function render() {
+  const data = applyFilters(allData);
+  renderKPIs(data);
+  renderBarsByField(data);
+  renderCropChart(data);
+  renderTable(data);
+  renderDaily(data);
+}
+
+// Filtros jerárquicos — cada cambio repopula los dependientes y re-renderiza
+['fSeason','fFarm','fField','fCrop'].forEach(id =>
+  document.getElementById(id).addEventListener('change', () => {
+    populateFilters(allData);
+    render();
+  })
+);
+
+// Recarga automática cada hora
+setInterval(() => { allData = []; loadData(); }, 60 * 60 * 1000);
+
+// Carga inicial
+loadData();
+</script>
+</body>
+</html>
